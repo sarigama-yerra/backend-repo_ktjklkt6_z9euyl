@@ -1,8 +1,11 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
+from database import create_document
 
-app = FastAPI()
+app = FastAPI(title="Tarna Backend", description="API for Tarna marketing site lead capture and health checks")
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,13 +15,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class Lead(BaseModel):
+    name: str = Field(..., description="Contact person's name", min_length=1)
+    restaurant: Optional[str] = Field(None, description="Restaurant name")
+    email: EmailStr
+    message: Optional[str] = Field(None, description="Message from the user", max_length=2000)
+    source: Optional[str] = Field("website", description="Lead source identifier")
+
+
 @app.get("/")
 def read_root():
-    return {"message": "Hello from FastAPI Backend!"}
+    return {"message": "Tarna Backend Running"}
+
 
 @app.get("/api/hello")
 def hello():
     return {"message": "Hello from the backend API!"}
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.post("/api/leads")
+async def create_lead(lead: Lead):
+    """Capture contact form submissions as leads in MongoDB"""
+    try:
+        lead_id = create_document("lead", lead)
+        return {"success": True, "id": lead_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/test")
 def test_database():
